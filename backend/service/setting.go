@@ -18,12 +18,13 @@ var defaultValueMap = map[string]string{
 	"webListen":     "",
 	"webDomain":     "",
 	"webPort":       "2095",
-	"webSecret":     common.Random(32),
+	"secret":        common.Random(32),
 	"webCertFile":   "",
 	"webKeyFile":    "",
 	"webPath":       "/app/",
 	"webURI":        "",
 	"sessionMaxAge": "0",
+	"trafficAge":    "30",
 	"timeLocation":  "Asia/Tehran",
 	"subListen":     "",
 	"subPort":       "2096",
@@ -190,11 +191,11 @@ func (s *SettingService) SetWebPath(webPath string) error {
 }
 
 func (s *SettingService) GetSecret() ([]byte, error) {
-	secret, err := s.getString("webSecret")
-	if secret == defaultValueMap["webSecret"] {
-		err := s.saveSetting("webSecret", secret)
+	secret, err := s.getString("secret")
+	if secret == defaultValueMap["secret"] {
+		err := s.saveSetting("secret", secret)
 		if err != nil {
-			logger.Warning("save webSecret failed:", err)
+			logger.Warning("save secret failed:", err)
 		}
 	}
 	return []byte(secret), err
@@ -202,6 +203,10 @@ func (s *SettingService) GetSecret() ([]byte, error) {
 
 func (s *SettingService) GetSessionMaxAge() (int, error) {
 	return s.getInt("sessionMaxAge")
+}
+
+func (s *SettingService) GetTrafficAge() (int, error) {
+	return s.getInt("trafficAge")
 }
 
 func (s *SettingService) GetTimeLocation() (*time.Location, error) {
@@ -313,10 +318,10 @@ func (s *SettingService) Save(tx *gorm.DB, changes []model.Changes) error {
 		json.Unmarshal(change.Obj, &obj)
 
 		// Secure file existance check
-		if key == "webCertFile" ||
+		if obj != "" && (key == "webCertFile" ||
 			key == "webKeyFile" ||
 			key == "subCertFile" ||
-			key == "subKeyFile" {
+			key == "subKeyFile") {
 			err = s.fileExists(obj)
 			if err != nil {
 				return common.NewError(" -> ", obj, " is not exists")

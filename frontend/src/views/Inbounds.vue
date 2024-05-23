@@ -5,6 +5,8 @@
     :id="modal.id"
     :stats="modal.stats"
     :data="modal.data"
+    :inTags="inTags"
+    :outTags="outTags"
     @close="closeModal"
     @save="saveModal"
   />
@@ -23,7 +25,7 @@
   <v-row>
     <v-col cols="12" sm="4" md="3" lg="2" v-for="(item, index) in <any[]>inbounds" :key="item.tag">
       <v-card rounded="xl" elevation="5" min-width="200" :title="item.tag">
-        <v-card-subtitle>
+        <v-card-subtitle style="margin-top: -20px;">
           <v-row>
             <v-col>{{ item.type }}</v-col>
           </v-row>
@@ -42,7 +44,7 @@
             </v-col>
           </v-row>
           <v-row>
-            <v-col>{{ $t('in.tls') }}</v-col>
+            <v-col>{{ $t('objects.tls') }}</v-col>
             <v-col dir="ltr">
               {{ Object.hasOwn(item,'tls') ? $t(item.tls?.enabled ? 'enable' : 'disable') : '-'  }}
             </v-col>
@@ -106,6 +108,8 @@ import { computed, ref } from 'vue'
 import { InTypes, Inbound, InboundWithUser, ShadowTLS, VLESS } from '@/types/inbounds'
 import { Client } from '@/types/clients'
 import { Link, LinkUtil } from '@/plugins/link'
+import Message from '@/store/modules/message'
+import { i18n } from '@/locales'
 
 const appConfig = computed((): Config => {
   return <Config> Data().config
@@ -113,6 +117,14 @@ const appConfig = computed((): Config => {
 
 const inbounds = computed((): Inbound[] => {
   return <Inbound[]> appConfig.value.inbounds
+})
+
+const inTags = computed((): string[] => {
+  return inbounds.value?.map(i => i.tag)
+})
+
+const outTags = computed((): string[] => {
+  return appConfig.value.outbounds?.map(i => i.tag)
 })
 
 const clients = computed((): Client[] => {
@@ -124,7 +136,7 @@ const onlines = computed(() => {
 })
 
 const v2rayStats = computed((): V2rayApiStats => {
-  return <V2rayApiStats> appConfig.value.experimental.v2ray_api.stats
+  return <V2rayApiStats> appConfig.value.experimental?.v2ray_api.stats
 })
 
 const modal = ref({
@@ -146,6 +158,13 @@ const closeModal = () => {
   modal.value.visible = false
 }
 const saveModal = (data:Inbound, stats: boolean) => {
+  // Check duplicate tag
+  const oldTag = modal.value.id != -1 ? inbounds.value[modal.value.id].tag : null
+  if (data.tag != oldTag && inTags.value.includes(data.tag)) {
+    const sb = Message()
+    sb.showMessage(i18n.global.t('error.dplData') + ': ' + i18n.global.t('objects.tag') ,'error', 5000)
+    return
+  }
   // New or Edit
   if (modal.value.id == -1) {
     inbounds.value.push(data)
@@ -171,10 +190,12 @@ const saveModal = (data:Inbound, stats: boolean) => {
 
     inbounds.value[modal.value.id] = data
   }
-  // Set users
-  data = buildInboundsUsers(data)
-  // Update links
-  if (Object.hasOwn(data,'users')) updateLinks(data)
+  if (Object.hasOwn(data,'users')) {
+    // Set users
+    data = buildInboundsUsers(data)
+    // Update links
+    updateLinks(data)
+  }
   modal.value.visible = false
 }
 const updateLinks = (i: InboundWithUser) => {
