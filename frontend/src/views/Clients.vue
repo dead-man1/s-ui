@@ -38,7 +38,7 @@
             <v-col cols="auto">
               <v-switch color="primary"
               v-model="clients[index].enable"
-              @update:model-value="buildInboundsUsers(item.inbounds.split(','))"
+              @update:model-value="buildInboundsUsers(item.inbounds)"
               hideDetails density="compact" />
             </v-col>
           </v-row>
@@ -53,9 +53,9 @@
             <v-col>{{ $t('pages.inbounds') }}</v-col>
             <v-col dir="ltr">
               <v-tooltip activator="parent" dir="ltr" location="bottom" v-if="item.inbounds != ''">
-                <span v-for="i in item.inbounds.split(',')">{{ i }}<br /></span>
+                <span v-for="i in item.inbounds">{{ i }}<br /></span>
               </v-tooltip>
-              {{ item.inbounds != '' ? item.inbounds.split(',').length : 0 }}
+              {{ item.inbounds.length }}
             </v-col>
           </v-row>
           <v-row>
@@ -135,8 +135,8 @@ import { Config, V2rayApiStats } from '@/types/config'
 import { InTypes, Inbound,InboundWithUser, ShadowTLS, VLESS } from '@/types/inbounds'
 import { Link, LinkUtil } from '@/plugins/link'
 import { HumanReadable } from '@/plugins/utils'
-import Message from '@/store/modules/message'
 import { i18n } from '@/locales'
+import { push } from 'notivue'
 
 const clients = computed((): any[] => {
   return Data().clients
@@ -185,23 +185,19 @@ const saveModal = (data:any, stats:boolean) => {
   // Check duplicate name
   const oldName = modal.value.index != -1 ? clients.value[modal.value.index].name : null
   if (data.name != oldName && clients.value.findIndex(c => c.name == data.name) != -1) {
-    const sb = Message()
-    sb.showMessage(i18n.global.t('error.dplData') + ': ' + i18n.global.t('client.name') ,'error', 5000)
+    push.error({
+      message: i18n.global.t('error.dplData') + ": " + i18n.global.t('client.name')
+    })
     return
   }
-  const inboundTags: string[] = data.inbounds.split(',')?? []
   if(modal.value.index == -1) {
     clients.value.push(data)
   } else {
-    const oldData = createClient(clients.value[modal.value.index])
-    oldData.inbounds.split(',').forEach((i:string) => {
-      if (!inboundTags.includes(i)) inboundTags.push(i)
-    })
     clients.value[modal.value.index] = data
   }
 
   // Rebuild affected inbounds
-  buildInboundsUsers(inboundTags)
+  buildInboundsUsers(data.inbounds)
 
   // Rebuild links
   data.links = updateLinks(data)
@@ -229,15 +225,14 @@ const buildInboundsUsers = (inboundTags:string[]) => {
       if (inbound_index != -1){
         const users = <any>[]
         const newInbound = <InboundWithUser>inbounds.value[inbound_index]
-        const inboundClients = clients.value.filter(c => c.enable && c.inbounds.split(',').includes(tag))
+        const inboundClients = clients.value.filter(c => c.enable && c.inbounds.includes(tag))
         inboundClients.forEach(c => {
-          const clientConfig = JSON.parse(c.config)
           // Remove flow in non tls VLESS
           if (newInbound.type == InTypes.VLESS) {
             const vlessInbound = <VLESS>newInbound
-            if (!vlessInbound.tls?.enabled || vlessInbound.transport?.type) delete(clientConfig["vless"].flow)
+            if (!vlessInbound.tls?.enabled || vlessInbound.transport?.type) delete(c.config?.vless?.flow)
           }
-          users.push(clientConfig[newInbound.type])
+          users.push(c.config[newInbound.type])
         })
         newInbound.users = users
 
@@ -257,19 +252,20 @@ const buildInboundsUsers = (inboundTags:string[]) => {
       }
     })
 }
-const updateLinks = (c:Client):string => {
-  const clientInbounds = <Inbound[]>inbounds.value.filter(i => c.inbounds.split(',').includes(i.tag))
+const updateLinks = (c:Client):Link[] => {
+  const clientInbounds = <Inbound[]>inbounds.value.filter(i => c.inbounds.includes(i.tag))
   const newLinks = <Link[]>[]
   clientInbounds.forEach(i =>{
-    const uri = LinkUtil.linkGenerator(c.name,i)
+    const tlsConfig = <any>Data().tlsConfigs?.findLast((t:any) => t.inbounds.includes(i.tag))
+    const uri = LinkUtil.linkGenerator(c.name,i,tlsConfig?.client)
     if (uri.length>0){
       newLinks.push(<Link>{ type: 'local', remark: i.tag, uri: uri })
     }
   })
-  let links = c.links && c.links.length>0? <Link[]>JSON.parse(c.links) : <Link[]>[]
+  let links = c.links && c.links.length>0? c.links : <Link[]>[]
   links = [...newLinks, ...links.filter(l => l.type != 'local')]
 
-  return JSON.stringify(links)
+  return links
 }
 const delClient = (clientIndex: number) => {
   const id = clients.value[clientIndex].id
@@ -283,7 +279,7 @@ const delClient = (clientIndex: number) => {
   }
 
   clients.value.splice(clientIndex,1)
-  buildInboundsUsers(oldData.inbounds.split(','))
+  buildInboundsUsers(oldData.inbounds)
   if (id>0) Data().delClient(id)
   delOverlay.value[clientIndex] = false
 }
