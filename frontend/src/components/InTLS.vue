@@ -143,6 +143,7 @@
 </template>
 
 <script lang="ts">
+import { i18n } from '@/locales'
 import { iTls, defaultInTls } from '@/types/inTls'
 export default {
   props: ['inbound', 'tlsConfigs', 'tls_id'],
@@ -183,7 +184,7 @@ export default {
       return <iTls> this.$props.inbound.tls
     },
     tlsItems(): any[] {
-      return [ { title: '', value: 0 }, ...this.$props.tlsConfigs?.map((t:any) => { return { title: t.name, value: t.id } } )]
+      return [ { title: i18n.global.t('none'), value: 0 }, ...this.$props.tlsConfigs?.map((t:any) => { return { title: t.name, value: t.id } } )]
     },
     tlsId: {
       get() { return this.tls_id.value?? 0 },
@@ -191,7 +192,10 @@ export default {
     },
     tlsEnable: {
       get() { return this.tls.enabled?? false },
-      set(newValue: boolean) { this.$props.inbound.tls = newValue ? { enabled: true } : {} }
+      set(newValue: boolean) {
+        this.$props.inbound.tls = newValue ? { enabled: true } : {}
+        this.$props.tls_id.value = 0
+      }
     },
     tlsOptional(): boolean {
       return !['hysteria','hysteria2','tuic','naive'].includes(this.$props.inbound.type)
