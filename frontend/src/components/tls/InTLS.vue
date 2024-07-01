@@ -7,7 +7,7 @@
       <v-col cols="12" sm="6" md="4" v-if="tls.enabled">
         <v-select
           hide-details
-          label="Preset"
+          :label="$t('template')"
           :items="tlsItems"
           @update:model-value="changeTlsItem($event)"
           v-model="tlsId">
@@ -116,7 +116,7 @@
       <v-spacer></v-spacer>
       <v-menu v-model="menu" :close-on-content-click="false" location="start" v-if="tls.enabled">
         <template v-slot:activator="{ props }">
-          <v-btn v-bind="props" hide-details>{{ $t('tls.options') }}</v-btn>
+          <v-btn v-bind="props" hide-details variant="tonal">{{ $t('tls.options') }}</v-btn>
         </template>
         <v-card>
           <v-list>

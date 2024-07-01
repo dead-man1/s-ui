@@ -14,7 +14,7 @@
   </v-row>
   <v-row>
     <v-col cols="12" sm="4" md="3" lg="2" v-for="(item, index) in <any[]>tlsConfigs" :key="item.id">
-      <v-card rounded="xl" elevation="5" min-width="200" :title="item.id + '. ' + item.name">
+      <v-card rounded="xl" elevation="5" min-width="200" :title="(item.id? item.id + '. ' : '*') + item.name">
         <v-card-subtitle style="margin-top: -20px;">
           {{ item.server?.server_name?.length>0 ? item.server.server_name : "-" }}
         </v-card-subtitle>
@@ -71,6 +71,10 @@
               </v-card-actions>
             </v-card>
           </v-overlay>
+          <v-btn icon="mdi-content-duplicate" @click="clone(index)">
+            <v-icon />
+            <v-tooltip activator="parent" location="top" :text="$t('actions.clone')"></v-tooltip>
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-col>
@@ -111,6 +115,15 @@ const showModal = (index: number) => {
   modal.value.data = index == -1 ? '{}' : JSON.stringify(tlsConfigs.value[index])
   modal.value.visible = true
 }
+const clone = (index: number) => {
+  let data = JSON.parse(JSON.stringify(tlsConfigs.value[index]))
+  data.id = 0
+  data.inbounds = []
+  while (tlsConfigs.value.findIndex(t => t.name == data.name) != -1){
+    data.name += "-copy"
+  }
+  saveModal(data)
+}
 const closeModal = () => {
   modal.value.visible = false
 }
@@ -144,9 +157,13 @@ const updateLinks = (i:any,tlsClient:any) => {
         const clientInbounds = <Inbound[]>inbounds.value.filter(inb => client?.inbounds.includes(inb.tag))
         const newLinks = <Link[]>[]
         clientInbounds.forEach(i =>{
-          const uri = LinkUtil.linkGenerator(client.name,i,tlsClient)
-          if (uri.length>0){
-            newLinks.push(<Link>{ type: 'local', remark: i.tag, uri: uri })
+          const cData = <any>Data().inData?.findLast((d:any) => d.tag == i.tag)
+          const addrs = cData ? <any[]>cData.addrs : []
+          const uris = LinkUtil.linkGenerator(client,i, tlsClient, addrs)
+          if (uris.length>0){
+            uris.forEach(uri => {
+              newLinks.push(<Link>{ type: 'local', remark: i.tag, uri: uri })
+            })
           }
         })
         let links = client.links && client.links.length>0? client.links : <Link[]>[]

@@ -5,7 +5,7 @@
         {{ $t('actions.' + title) + " " + $t('objects.tls') }}
       </v-card-title>
       <v-divider></v-divider>
-      <v-card-text>
+      <v-card-text style="padding: 0 16px; overflow-y: scroll;">
         <v-card class="rounded-lg">
           <v-row>
             <v-col cols="12" sm="6" md="4">
@@ -138,14 +138,6 @@
               </v-col>
             </v-row>
             <v-row>
-              <v-col cols="12" sm="6" md="4" v-if="outTls.utls != undefined">
-                <v-select
-                  hide-details
-                  label="Fingerprint"
-                  :items="fingerprints"
-                  v-model="outTls.utls.fingerprint">
-                </v-select>
-              </v-col>
               <v-col cols="12" sm="6" md="4">
                 <v-switch color="primary" :label="$t('tls.disableSni')" v-model="disableSni" hide-details></v-switch>
               </v-col>
@@ -223,11 +215,21 @@
               </v-col>
             </v-row>
           </template>
+          <v-row v-if="outTls.utls != undefined">
+            <v-col cols="12" sm="6" md="4">
+              <v-select
+                hide-details
+                label="Fingerprint"
+                :items="fingerprints"
+                v-model="outTls.utls.fingerprint">
+              </v-select>
+            </v-col>
+          </v-row>
           <v-card-actions>
             <v-spacer></v-spacer>
             <v-menu v-model="menu" :close-on-content-click="false" location="start">
               <template v-slot:activator="{ props }">
-                <v-btn v-bind="props" hide-details>{{ $t('tls.options') }}</v-btn>
+                <v-btn v-bind="props" hide-details variant="tonal">{{ $t('tls.options') }}</v-btn>
               </template>
               <v-card>
                 <v-list>
@@ -247,15 +249,15 @@
                     <v-list-item>
                       <v-switch v-model="optionCS" color="primary" :label="$t('tls.cs')" hide-details></v-switch>
                     </v-list-item>
-                    <v-list-item>
-                      <v-switch v-model="optionFP" color="primary" label="UTLS" hide-details></v-switch>
-                    </v-list-item>
                   </template>
                   <template v-else>
                     <v-list-item>
                       <v-switch v-model="optionTime" color="primary" label="Max Time Difference" hide-details></v-switch>
                     </v-list-item>
                   </template>
+                  <v-list-item>
+                    <v-switch v-model="optionFP" color="primary" label="UTLS" hide-details></v-switch>
+                  </v-list-item>
                 </v-list>
               </v-card>
             </v-menu>
@@ -289,8 +291,8 @@
 <script lang="ts">
 import { iTls, defaultInTls } from '@/types/inTls'
 import { oTls, defaultOutTls } from '@/types/outTls'
-import AcmeVue from '@/components/Acme.vue'
-import EchVue from '@/components/Ech.vue'
+import AcmeVue from '@/components/tls/Acme.vue'
+import EchVue from '@/components/tls/Ech.vue'
 import HttpUtils from '@/plugins/httputil'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
@@ -405,13 +407,17 @@ export default {
               if (line === "-----BEGIN PRIVATE KEY-----") {
                   isPrivateKey = true
                   isPublicKey = false
+                  privateKey.push(line)
               } else if (line === "-----END PRIVATE KEY-----") {
                   isPrivateKey = false
+                  privateKey.push(line)
               } else if (line === "-----BEGIN CERTIFICATE-----") {
                   isPublicKey = true
                   isPrivateKey = false
+                  publicKey.push(line)
               } else if (line === "-----END CERTIFICATE-----") {
                   isPublicKey = false
+                  publicKey.push(line)
               } else if (isPrivateKey) {
                   privateKey.push(line)
               } else if (isPublicKey) {

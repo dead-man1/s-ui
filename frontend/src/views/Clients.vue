@@ -40,7 +40,7 @@
   </v-row>
   <v-row>
     <template v-for="(item, index) in clients" :key="item.id">
-      <v-col cols="12" sm="4" md="3" lg="2" v-if="checkFilter(item)">
+      <v-col cols="12" sm="4" md="3" lg="2" :style="checkFilter(item)? '' : 'opacity: .2'">
         <v-card rounded="xl" elevation="5" min-width="200">
           <v-card-title>
             <v-row>
@@ -128,8 +128,14 @@
                 </v-card-actions>
               </v-card>
             </v-overlay>
-            <v-btn icon="mdi-qrcode" @click="showQrCode(index)" />
-            <v-btn icon="mdi-chart-line" @click="showStats(item.name)" />
+            <v-btn icon="mdi-qrcode" @click="showQrCode(index)">
+              <v-icon />
+              <v-tooltip activator="parent" location="top" text="QR-Code"></v-tooltip>
+            </v-btn>
+            <v-btn icon="mdi-chart-line" @click="showStats(item.name)" v-if="v2rayStats.users.includes(item.name)">
+              <v-icon />
+              <v-tooltip activator="parent" location="top" :text="$t('stats.graphTitle')"></v-tooltip>
+            </v-btn>
           </v-card-actions>
         </v-card>      
       </v-col>
@@ -291,9 +297,13 @@ const updateLinks = (c:Client):Link[] => {
   const newLinks = <Link[]>[]
   clientInbounds.forEach(i =>{
     const tlsConfig = <any>Data().tlsConfigs?.findLast((t:any) => t.inbounds.includes(i.tag))
-    const uri = LinkUtil.linkGenerator(c.name,i,tlsConfig?.client)
-    if (uri.length>0){
-      newLinks.push(<Link>{ type: 'local', remark: i.tag, uri: uri })
+    const cData = <any>Data().inData?.findLast((d:any) => d.tag == i.tag)
+    const addrs = cData ? <any[]>cData.addrs : []
+    const uris = LinkUtil.linkGenerator(c.name,i, tlsConfig?.client?? {}, addrs)
+    if (uris.length>0){
+      uris.forEach(uri => {
+        newLinks.push(<Link>{ type: 'local', remark: i.tag, uri: uri })
+      })
     }
   })
   let links = c.links && c.links.length>0? c.links : <Link[]>[]

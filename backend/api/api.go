@@ -3,6 +3,7 @@ package api
 import (
 	"s-ui/logger"
 	"s-ui/service"
+	"s-ui/util"
 	"strconv"
 	"strings"
 
@@ -15,6 +16,7 @@ type APIHandler struct {
 	service.ConfigService
 	service.ClientService
 	service.TlsService
+	service.InDataService
 	service.PanelService
 	service.StatsService
 	service.ServerService
@@ -94,6 +96,10 @@ func (a *APIHandler) postHandler(c *gin.Context) {
 	case "restartApp":
 		err = a.PanelService.RestartPanel(3)
 		jsonMsg(c, "restartApp", err)
+	case "linkConvert":
+		link := c.Request.FormValue("link")
+		result, _, err := util.GetOutbound(link, 0)
+		jsonObj(c, result, err)
 	default:
 		jsonMsg(c, "API call", nil)
 	}
@@ -206,6 +212,10 @@ func (a *APIHandler) loadData(c *gin.Context) (interface{}, error) {
 		if err != nil {
 			return "", err
 		}
+		inData, err := a.InDataService.GetAll()
+		if err != nil {
+			return "", err
+		}
 		subURI, err := a.SettingService.GetFinalSubURI(strings.Split(c.Request.Host, ":")[0])
 		if err != nil {
 			return "", err
@@ -213,6 +223,7 @@ func (a *APIHandler) loadData(c *gin.Context) (interface{}, error) {
 		data["config"] = *config
 		data["clients"] = clients
 		data["tls"] = tlsConfigs
+		data["inData"] = inData
 		data["subURI"] = subURI
 		data["onlines"] = onlines
 	} else {
