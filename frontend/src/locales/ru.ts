@@ -103,6 +103,7 @@ export default {
     disable: "Отключить",
     close: "Закрыть",
     restartApp: "Перезапустить приложение",
+    restartSb: "Перезапустить Singbox",
   },
   login: {
     title: "Вход",
@@ -153,6 +154,7 @@ export default {
     directDns: "Прямой DNS",
     toDirectDns: "Маршрутизация на Direct DNS",
     jsonSubOptions: "Другие параметры",
+    excludePkg: "Исключить пакеты",
   },
   client: {
     name: "Имя",
@@ -164,6 +166,11 @@ export default {
     links: "Ссылки",
     external: "Внешняя ссылка",
     sub: "Внешняя подписка",
+  },
+  bulk: {
+    add: "Добавить пакетно",
+    order: "Порядок",
+    random: "Случайный",
   },
   types: {
     un: "Имя пользователя",
@@ -199,6 +206,10 @@ export default {
       congControl: "Контроль перегрузок",
       authTimeout: "Таймаут аутентификации",
       hb: "Сердцебиение",
+    },
+    tun: {
+      addr: "Адреса",
+      ifName: "Имя интерфейса",
     },
     vless: {
       flow: "Поток",
