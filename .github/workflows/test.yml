@@ -142,7 +142,7 @@ jobs:
           set -e
           . ./build-tags.sh
           TAGS=$(tags_for test)
-          go test -tags "$TAGS" ./...
+          go test -tags "$TAGS" -ldflags "$(ldflags_for test)" ./...
 
       - name: Save Go build cache
         if: github.ref == 'refs/heads/main' && steps.go-build-cache.outputs.cache-hit != 'true'
@@ -189,7 +189,7 @@ jobs:
           set -e
           . ./build-tags.sh
           TAGS=$(tags_for test)
-          go test -race -short -tags "$TAGS" ./...
+          go test -race -short -tags "$TAGS" -ldflags "$(ldflags_for test)" ./...
 
       - name: Save Go build cache
         if: github.ref == 'refs/heads/main' && steps.go-build-cache.outputs.cache-hit != 'true'
