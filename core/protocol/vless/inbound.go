@@ -33,7 +33,10 @@ func RegisterInbound(registry *inbound.Registry) {
 	inbound.Register[option.VLESSInboundOptions](registry, C.TypeVLESS, NewInbound)
 }
 
-var _ adapter.TCPInjectableInbound = (*Inbound)(nil)
+var (
+	_ adapter.TCPInjectableInbound = (*Inbound)(nil)
+	_ adapter.Referrer             = (*Inbound)(nil)
+)
 
 type Inbound struct {
 	inbound.Adapter
@@ -231,6 +234,6 @@ func (h *inboundTransportHandler) NewConnectionEx(ctx context.Context, conn net.
 	(*Inbound)(h).NewConnection(ctx, conn, metadata, onClose)
 }
 
-func (h *Inbound) References() []string {
-	return h.references
+func (h *Inbound) References() ([]string, []string) {
+	return h.references, nil
 }

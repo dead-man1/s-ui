@@ -68,6 +68,19 @@ func (s *OutboundService) Save(tx *gorm.DB, act string, data json.RawMessage) er
 		if err != nil {
 			return err
 		}
+		var oldTag string
+		if act == "edit" {
+			err = tx.Model(model.Outbound{}).Select("tag").Where("id = ?", outbound.Id).Find(&oldTag).Error
+			if err != nil {
+				return err
+			}
+			if oldTag != outbound.Tag {
+				err = checkRouteReferences(tx, "outbound", oldTag)
+				if err != nil {
+					return err
+				}
+			}
+		}
 
 		if corePtr.IsRunning() {
 			configData, err := outbound.MarshalJSON()
@@ -75,11 +88,6 @@ func (s *OutboundService) Save(tx *gorm.DB, act string, data json.RawMessage) er
 				return err
 			}
 			if act == "edit" {
-				var oldTag string
-				err = tx.Model(model.Outbound{}).Select("tag").Where("id = ?", outbound.Id).Find(&oldTag).Error
-				if err != nil {
-					return err
-				}
 				err = corePtr.RemoveOutbound(oldTag)
 				if err != nil && err != os.ErrInvalid {
 					return err
@@ -98,6 +106,10 @@ func (s *OutboundService) Save(tx *gorm.DB, act string, data json.RawMessage) er
 	case "del":
 		var tag string
 		err = json.Unmarshal(data, &tag)
+		if err != nil {
+			return err
+		}
+		err = checkRouteReferences(tx, "outbound", tag)
 		if err != nil {
 			return err
 		}

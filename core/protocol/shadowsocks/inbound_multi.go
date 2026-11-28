@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 	"os"
-	"sync/atomic"
 	"time"
 
 	"github.com/alireza0/s-ui/core/usersession"
@@ -44,11 +43,17 @@ type MultiInbound struct {
 	router   adapter.ConnectionRouterEx
 	logger   logger.ContextLogger
 	listener *listener.Listener
-	service  shadowsocks.MultiService[int]
-	// users is replaced wholesale by UpdateUsers while connections read it.
-	users    atomic.Pointer[[]option.ShadowsocksUser]
+	service  shadowsocks.MultiService[multiUser]
 	tracker  adapter.SSMTracker
 	sessions *usersession.Registry
+}
+
+// multiUser is what the service hands back on authentication. Carrying the
+// name with it keeps a connection tied to the user it authenticated as, even
+// when UpdateUsers swaps the list while the connection is being set up.
+type multiUser struct {
+	index int
+	name  string
 }
 
 func newMultiInbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.ShadowsocksInboundOptions) (*MultiInbound, error) {
@@ -69,9 +74,9 @@ func newMultiInbound(ctx context.Context, router adapter.Router, logger log.Cont
 	} else {
 		udpTimeout = C.UDPTimeout
 	}
-	var service shadowsocks.MultiService[int]
+	var service shadowsocks.MultiService[multiUser]
 	if common.Contains(shadowaead_2022.List, options.Method) {
-		service, err = shadowaead_2022.NewMultiServiceWithPassword[int](
+		service, err = shadowaead_2022.NewMultiServiceWithPassword[multiUser](
 			options.Method,
 			options.Password,
 			int64(udpTimeout.Seconds()),
@@ -79,7 +84,7 @@ func newMultiInbound(ctx context.Context, router adapter.Router, logger log.Cont
 			ntp.TimeFuncFromContext(ctx),
 		)
 	} else if common.Contains(shadowaead.List, options.Method) {
-		service, err = shadowaead.NewMultiService[int](
+		service, err = shadowaead.NewMultiService[multiUser](
 			options.Method,
 			int64(udpTimeout.Seconds()),
 			adapter.NewLegacyUpstreamHandler(adapter.InboundContext{}, inbound.newConnection, inbound.newPacketConnection, inbound),
@@ -91,8 +96,8 @@ func newMultiInbound(ctx context.Context, router adapter.Router, logger log.Cont
 		return nil, err
 	}
 	if len(options.Users) > 0 {
-		err = service.UpdateUsersWithPasswords(common.MapIndexed(options.Users, func(index int, user option.ShadowsocksUser) int {
-			return index
+		err = service.UpdateUsersWithPasswords(common.MapIndexed(options.Users, func(index int, user option.ShadowsocksUser) multiUser {
+			return multiUser{index: index, name: user.Name}
 		}), common.Map(options.Users, func(user option.ShadowsocksUser) string {
 			return user.Password
 		}))
@@ -101,7 +106,6 @@ func newMultiInbound(ctx context.Context, router adapter.Router, logger log.Cont
 		}
 	}
 	inbound.service = service
-	inbound.users.Store(&options.Users)
 	inbound.sessions = usersession.NewRegistry()
 	inbound.listener = listener.New(listener.Options{
 		Context:                  ctx,
@@ -132,16 +136,8 @@ func (h *MultiInbound) SetTracker(tracker adapter.SSMTracker) {
 }
 
 func (h *MultiInbound) UpdateUsers(users []string, uPSKs []string) error {
-	// Store first: the service is what hands out the indexes read from this
-	// list, so it must never point past the list a connection can see.
-	userList := common.Map(users, func(user string) option.ShadowsocksUser {
-		return option.ShadowsocksUser{
-			Name: user,
-		}
-	})
-	h.users.Store(&userList)
-	return h.service.UpdateUsersWithPasswords(common.MapIndexed(users, func(index int, user string) int {
-		return index
+	return h.service.UpdateUsersWithPasswords(common.MapIndexed(users, func(index int, user string) multiUser {
+		return multiUser{index: index, name: user}
 	}), uPSKs)
 }
 
@@ -167,16 +163,13 @@ func (h *MultiInbound) NewPacket(buffer *buf.Buffer, source M.Socksaddr) {
 }
 
 func (h *MultiInbound) newConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
-	userIndex, loaded := auth.UserFromContext[int](ctx)
+	authUser, loaded := auth.UserFromContext[multiUser](ctx)
 	if !loaded {
 		return os.ErrInvalid
 	}
-	var user string
-	if users := *h.users.Load(); userIndex < len(users) {
-		user = users[userIndex].Name
-	}
+	user := authUser.name
 	if user == "" {
-		user = F.ToString(userIndex)
+		user = F.ToString(authUser.index)
 	} else {
 		metadata.User = user
 	}
@@ -204,16 +197,13 @@ func (h *MultiInbound) newConnection(ctx context.Context, conn net.Conn, metadat
 }
 
 func (h *MultiInbound) newPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext) error {
-	userIndex, loaded := auth.UserFromContext[int](ctx)
+	authUser, loaded := auth.UserFromContext[multiUser](ctx)
 	if !loaded {
 		return os.ErrInvalid
 	}
-	var user string
-	if users := *h.users.Load(); userIndex < len(users) {
-		user = users[userIndex].Name
-	}
+	user := authUser.name
 	if user == "" {
-		user = F.ToString(userIndex)
+		user = F.ToString(authUser.index)
 	} else {
 		metadata.User = user
 	}

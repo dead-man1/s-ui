@@ -16,16 +16,15 @@ import (
 var _ adapter.OutboundManager = (*OutboundManager)(nil)
 
 type OutboundManager struct {
-	logger                  log.ContextLogger
-	registry                adapter.OutboundRegistry
-	endpoint                adapter.EndpointManager
-	defaultTag              string
-	scopes                  componentScopes
-	access                  sync.RWMutex
-	outbounds               []adapter.Outbound
-	outboundByTag           map[string]adapter.Outbound
-	defaultOutbound         adapter.Outbound
-	defaultOutboundFallback func() (adapter.Outbound, error)
+	logger          log.ContextLogger
+	registry        adapter.OutboundRegistry
+	endpoint        adapter.EndpointManager
+	defaultTag      string
+	scopes          componentScopes
+	access          sync.RWMutex
+	outbounds       []adapter.Outbound
+	outboundByTag   map[string]adapter.Outbound
+	defaultOutbound adapter.Outbound
 }
 
 func NewOutboundManager(logger log.ContextLogger, registry adapter.OutboundRegistry, endpoint adapter.EndpointManager, defaultTag string) *OutboundManager {
@@ -43,35 +42,35 @@ func outboundName(outbound adapter.Outbound) string {
 	return "outbound/" + outbound.Type() + "[" + outbound.Tag() + "]"
 }
 
-func (m *OutboundManager) Initialize(defaultOutboundFallback func() (adapter.Outbound, error)) {
-	m.defaultOutboundFallback = defaultOutboundFallback
+// Initialize resolves the default outbound while the box is being created, as
+// upstream does, so that route rule validation already sees the fallback.
+func (m *OutboundManager) Initialize(defaultOutboundFallback func() (adapter.Outbound, error)) error {
+	m.access.Lock()
+	defer m.access.Unlock()
+	if m.defaultTag != "" && m.defaultOutbound == nil {
+		defaultEndpoint, loaded := m.endpoint.Get(m.defaultTag)
+		if !loaded {
+			return E.New("default outbound not found: ", m.defaultTag)
+		}
+		m.defaultOutbound = defaultEndpoint
+	}
+	if m.defaultOutbound == nil {
+		directOutbound, err := defaultOutboundFallback()
+		if err != nil {
+			return E.Cause(err, "create direct outbound for fallback")
+		}
+		m.outbounds = append(m.outbounds, directOutbound)
+		m.outboundByTag[directOutbound.Tag()] = directOutbound
+		m.defaultOutbound = directOutbound
+	}
+	return nil
 }
 
 func (m *OutboundManager) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	m.scopes.attach(stage, scope)
-	m.access.Lock()
-	if stage == adapter.StartStateInitialize {
-		if m.defaultTag != "" && m.defaultOutbound == nil {
-			defaultEndpoint, loaded := m.endpoint.Get(m.defaultTag)
-			if !loaded {
-				m.access.Unlock()
-				return E.New("default outbound not found: ", m.defaultTag)
-			}
-			m.defaultOutbound = defaultEndpoint
-		}
-		if m.defaultOutbound == nil {
-			directOutbound, err := m.defaultOutboundFallback()
-			if err != nil {
-				m.access.Unlock()
-				return E.Cause(err, "create direct outbound for fallback")
-			}
-			m.outbounds = append(m.outbounds, directOutbound)
-			m.outboundByTag[directOutbound.Tag()] = directOutbound
-			m.defaultOutbound = directOutbound
-		}
-	}
+	m.access.RLock()
 	outbounds := m.outbounds
-	m.access.Unlock()
+	m.access.RUnlock()
 	if stage == adapter.StartStateStart {
 		return m.startOutbounds(append(slices.Clone(outbounds), common.Map(m.endpoint.Endpoints(), func(it adapter.Endpoint) adapter.Outbound { return it })...))
 	}

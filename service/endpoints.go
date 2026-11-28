@@ -71,6 +71,19 @@ func (s *EndpointService) Save(tx *gorm.DB, act string, data json.RawMessage) er
 		if err != nil {
 			return err
 		}
+		var oldTag string
+		if act == "edit" {
+			err = tx.Model(model.Endpoint{}).Select("tag").Where("id = ?", endpoint.Id).Find(&oldTag).Error
+			if err != nil {
+				return err
+			}
+			if oldTag != endpoint.Tag {
+				err = checkRouteReferences(tx, "endpoint", oldTag)
+				if err != nil {
+					return err
+				}
+			}
+		}
 		if endpoint.Type == "warp" {
 			if act == "new" {
 				err = s.WarpService.RegisterWarp(&endpoint)
@@ -96,11 +109,6 @@ func (s *EndpointService) Save(tx *gorm.DB, act string, data json.RawMessage) er
 				return err
 			}
 			if act == "edit" {
-				var oldTag string
-				err = tx.Model(model.Endpoint{}).Select("tag").Where("id = ?", endpoint.Id).Find(&oldTag).Error
-				if err != nil {
-					return err
-				}
 				err = corePtr.RemoveEndpoint(oldTag)
 				if err != nil && err != os.ErrInvalid {
 					return err
@@ -119,6 +127,10 @@ func (s *EndpointService) Save(tx *gorm.DB, act string, data json.RawMessage) er
 	case "del":
 		var tag string
 		err = json.Unmarshal(data, &tag)
+		if err != nil {
+			return err
+		}
+		err = checkRouteReferences(tx, "endpoint", tag)
 		if err != nil {
 			return err
 		}
